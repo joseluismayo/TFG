@@ -50,7 +50,7 @@ def predict(nombre_imagen):
 
     print(f"El animal es: {animal_predicho}")
 
-predict('perro.jpg')
+predict('tejon.jpg')
         
 
 
