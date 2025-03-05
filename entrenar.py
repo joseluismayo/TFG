@@ -1,28 +1,43 @@
-import sys
 import os
+import cv2
 import random
-import shutil
-from tensorflow.keras.preprocessing.image import ImageDataGenerator  # Procesar las imágenes para entrenar el algoritmo
-from tensorflow.keras.optimizers import Adam  # Optimizador para entrenar el algoritmo
-from tensorflow.keras.models import Sequential, Model  # Model es necesario para usar transfer learning
+import matplotlib.pyplot as plt
+from PIL import Image
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dropout, Flatten, Dense, Activation
-from tensorflow.keras.layers import Convolution2D, MaxPooling2D  # Las capas con las que haremos el maxpolling
-from tensorflow.keras import backend as K  # Hace que se limpie la sesión para empezar el entrenamiento desde una sesión limpia
-from tensorflow.keras.callbacks import EarlyStopping  # Importamos el EarlyStopping para evitar sobreentrenar el modelo
-from tensorflow.keras.regularizers import l2
-from tensorflow.keras.callbacks import ReduceLROnPlateau
-from tensorflow.keras.applications import VGG16  # Carga de VGG16 como modelo preentrenado
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras import backend as K
+from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau
+from tensorflow.keras.applications import VGG16
+import shutil
 
+# Limpiar la sesión de Keras
 K.clear_session()
 
-# Rutas de las carpetas de entrenamiento y validación
-datos_entrenamiento = r'C:\Users\Usuario\Documents\TFG\Train'
-datos_validacion = r'C:\Users\Usuario\Documents\TFG\Validacion'
+# Directorios de imágenes
+datos_entrenamiento = 'Animales'  # Cambiar a la ruta correcta
+datos_validacion = 'AnimalesValidacion'  # Cambiar a la ruta correcta
 
-# Porcentaje de imágenes a mover (20%)
-porcentaje_a_mover = 0.2
+# Función para redimensionar sin distorsión, manteniendo la relación de aspecto
+def redimensionar_manteniendo_relacion_aspecto(img, tamaño_max=100):
+    # Obtener las dimensiones originales de la imagen
+    altura, ancho = img.shape[:2]
+    
+    # Calcular el factor de escala para redimensionar manteniendo la relación de aspecto
+    factor_escala = tamaño_max / float(max(altura, ancho))
+    
+    # Nuevas dimensiones manteniendo la relación de aspecto
+    nuevo_ancho = int(ancho * factor_escala)
+    nueva_altura = int(altura * factor_escala)
+    
+    # Redimensionar la imagen
+    img_redimensionada = cv2.resize(img, (nuevo_ancho, nueva_altura))
+    
+    return img_redimensionada
 
-# Mover imágenes de validación a entrenamiento al inicio
+# Mover todas las imágenes de validación a entrenamiento al inicio
 for clase in os.listdir(datos_validacion):
     clase_validacion = os.path.join(datos_validacion, clase)
     clase_entrenamiento = os.path.join(datos_entrenamiento, clase)
@@ -42,12 +57,7 @@ for clase in os.listdir(datos_validacion):
             else:
                 print(f'La imagen {imagen} ya está en la carpeta de entrenamiento')
 
-print("Proceso de mover todas las imágenes de validación a entrenamiento completado.")
-
-# EarlyStopping para evitar sobreajuste
-early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, verbose=1)
-
-# Recorremos cada clase (subcarpeta) dentro de la carpeta de entrenamiento
+# Mover un 20% de las imágenes de entrenamiento a validación
 for clase in os.listdir(datos_entrenamiento):
     clase_entrenamiento = os.path.join(datos_entrenamiento, clase)
     clase_validacion = os.path.join(datos_validacion, clase)
@@ -57,19 +67,67 @@ for clase in os.listdir(datos_entrenamiento):
 
     if os.path.isdir(clase_entrenamiento):
         imagenes = os.listdir(clase_entrenamiento)
-        cantidad_a_mover = int(len(imagenes) * porcentaje_a_mover)
-        imagenes_a_mover = random.sample(imagenes, cantidad_a_mover)
+        total_imagenes = len(imagenes)
+        imagenes_a_mover = random.sample(imagenes, int(0.2 * total_imagenes))  # Selecciona un 20%
+
         for imagen in imagenes_a_mover:
             origen = os.path.join(clase_entrenamiento, imagen)
             destino = os.path.join(clase_validacion, imagen)
 
             if not os.path.exists(destino):
                 shutil.move(origen, destino)
-                print(f'Movida {imagen} de {clase} a la carpeta de validación')
+                print(f'Movida {imagen} de {clase} de la carpeta de entrenamiento a la carpeta de validación')
             else:
                 print(f'La imagen {imagen} ya está en la carpeta de validación')
 
-print("Imagenes movidas")
+print("Proceso de mover un 20% de las imágenes a la carpeta de validación completado.")
+
+# Función para mostrar imágenes aleatorias de un directorio
+def mostrar_imagenes(directorio, num_imagenes=5, tamaño_max=80):
+    clases = os.listdir(directorio)  # Lista de clases
+    imagenes = []
+
+    for clase in clases:
+        ruta_clase = os.path.join(directorio, clase)
+        if os.path.isdir(ruta_clase):  # Verificar que es una carpeta
+            imagenes_clase = os.listdir(ruta_clase)
+            if imagenes_clase:
+                imagen = random.choice(imagenes_clase)  # Selecciona una imagen aleatoria
+                imagenes.append(os.path.join(ruta_clase, imagen))
+
+    # Mostrar imágenes
+    fig, axes = plt.subplots(1, min(num_imagenes, len(imagenes)), figsize=(4, 1))
+    if len(imagenes) == 1:
+        axes = [axes]  # Para evitar errores si solo hay una imagen
+
+    for ax, img_path in zip(axes, imagenes):
+        # Leer la imagen con OpenCV
+        img = cv2.imread(img_path)
+        
+        # Redimensionar la imagen manteniendo la relación de aspecto
+        img_resized = redimensionar_manteniendo_relacion_aspecto(img, tamaño_max)
+        
+        # Convertir a escala de grises
+        img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
+        
+        # Mostrar la imagen en escala de grises
+        ax.imshow(img_gray, cmap='gray')
+        ax.set_title(os.path.basename(img_path))
+        ax.axis('off')
+
+    plt.show()
+
+# Mostrar imágenes de entrenamiento
+print("Imágenes de entrenamiento:")
+mostrar_imagenes(datos_entrenamiento, num_imagenes=5)
+
+# Mostrar imágenes de validación
+print("Imágenes de validación:")
+mostrar_imagenes(datos_validacion, num_imagenes=5)
+
+print("Proceso de mover todas las imágenes de validación a entrenamiento completado.")
+
+early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, verbose=1)
 
 # Parámetros del modelo
 epocas = 20  # Número de épocas
@@ -95,10 +153,9 @@ entrenamiento_datagen = ImageDataGenerator(
     channel_shift_range=20.0,
 )
 
-
 # Transformación de las imágenes para validación
 validacion_datagen = ImageDataGenerator(
-    rescale = 1./255,  # Normaliza las imágenes para validación
+    rescale=1./255,  # Normaliza las imágenes para validación
 )
 
 # Carga de las imágenes de entrenamiento
@@ -138,9 +195,9 @@ cnn = Sequential([
 cnn.compile(loss='categorical_crossentropy', optimizer=Adam(learning_rate=lr), metrics=['accuracy'])
 
 # Entrenar el modelo
-cnn.fit(imagen_entrenamiento, steps_per_epoch=pasos, epochs=epocas, validation_data=imagen_validacion, validation_steps=pasos_validacion, callbacks=[early_stop, lr_scheduler])
+cnn.fit(imagen_entrenamiento, steps_per_epoch=pasos, epochs=epocas, validation_data=imagen_validacion, validation_steps=pasos_validacion, callbacks=[early_stop, lr_scheduler, tensorboard_callback])
 
-# Guardar el modelo y los pesos entrenados 
+# Guardar el modelo y los pesos entrenados
 directorio = './modelo/'  # Directorio donde se guardarán el modelo y los pesos
 if not os.path.exists(directorio):
     os.mkdir(directorio)  # Si no existe, lo creamos
