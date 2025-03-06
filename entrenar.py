@@ -3,6 +3,8 @@ import cv2
 import random
 import matplotlib.pyplot as plt
 from PIL import Image
+import numpy as np
+import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.models import Sequential
@@ -20,22 +22,30 @@ K.clear_session()
 datos_entrenamiento = 'Animales'  # Cambiar a la ruta correcta
 datos_validacion = 'AnimalesValidacion'  # Cambiar a la ruta correcta
 
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="./logs", histogram_freq=1)
+
 # Función para redimensionar sin distorsión, manteniendo la relación de aspecto
 def redimensionar_manteniendo_relacion_aspecto(img, tamaño_max=100):
-    # Obtener las dimensiones originales de la imagen
     altura, ancho = img.shape[:2]
-    
-    # Calcular el factor de escala para redimensionar manteniendo la relación de aspecto
     factor_escala = tamaño_max / float(max(altura, ancho))
     
-    # Nuevas dimensiones manteniendo la relación de aspecto
     nuevo_ancho = int(ancho * factor_escala)
     nueva_altura = int(altura * factor_escala)
     
-    # Redimensionar la imagen
-    img_redimensionada = cv2.resize(img, (nuevo_ancho, nueva_altura))
+    # Redimensionar la imagen con una interpolación de alta calidad
+    img_redimensionada = cv2.resize(img, (nuevo_ancho, nueva_altura), interpolation=cv2.INTER_AREA)
+
+    # Crear una imagen de fondo cuadrada (100x100) con color negro
+    fondo = np.zeros((tamaño_max, tamaño_max, 3), dtype=np.uint8)
     
-    return img_redimensionada
+    # Calcular las coordenadas para centrar la imagen en el fondo
+    x_offset = (tamaño_max - nuevo_ancho) // 2
+    y_offset = (tamaño_max - nueva_altura) // 2
+    
+    # Copiar la imagen redimensionada en el centro del fondo negro
+    fondo[y_offset:y_offset + nueva_altura, x_offset:x_offset + nuevo_ancho] = img_redimensionada
+    
+    return fondo
 
 # Mover todas las imágenes de validación a entrenamiento al inicio
 for clase in os.listdir(datos_validacion):
@@ -130,12 +140,12 @@ print("Proceso de mover todas las imágenes de validación a entrenamiento compl
 early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, verbose=1)
 
 # Parámetros del modelo
-epocas = 20  # Número de épocas
+epocas = 150  # Número de épocas
 altura = 100  # Altura de las imágenes de entrada
 longitud = 100  # Longitud de las imágenes de entrada
-batch_size = 64  # Número de imágenes procesadas por lote
-pasos = 94  # Número de pasos por época
-pasos_validacion = 10  # Número de pasos para validación
+batch_size = 32  # Número de imágenes procesadas por lote
+pasos = 194  # Número de pasos por época
+pasos_validacion = 34  # Número de pasos para validación
 clases = 19  # Número de clases (una para cada clase de animal)
 lr = 0.0001  # Tasa de aprendizaje
 lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, verbose=1)
@@ -143,11 +153,11 @@ lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, ver
 # Transformación de las imágenes para entrenamiento (Data Augmentation)
 entrenamiento_datagen = ImageDataGenerator(
     rescale=1./255,
-    shear_range=0.5,
-    rotation_range=40,
-    width_shift_range=0.4,
-    height_shift_range=0.4,
-    zoom_range=0.9,  # Incrementar el rango de zoom
+    shear_range=0.4,
+    rotation_range=30,
+    width_shift_range=0.3,
+    height_shift_range=0.3,
+    zoom_range=0.7,  # Incrementar el rango de zoom
     horizontal_flip=True,
     brightness_range=[0.2, 1.0],
     channel_shift_range=20.0,
