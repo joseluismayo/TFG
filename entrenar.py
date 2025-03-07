@@ -140,12 +140,12 @@ print("Proceso de mover todas las imágenes de validación a entrenamiento compl
 early_stop = EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True, verbose=1)
 
 # Parámetros del modelo
-epocas = 150  # Número de épocas
+epocas = 100  # Número de épocas
 altura = 100  # Altura de las imágenes de entrada
 longitud = 100  # Longitud de las imágenes de entrada
-batch_size = 32  # Número de imágenes procesadas por lote
-pasos = 194  # Número de pasos por época
-pasos_validacion = 34  # Número de pasos para validación
+batch_size = 64  # Número de imágenes procesadas por lote
+pasos = 9500 // batch_size  # Número de pasos por época
+pasos_validacion = 2500 // batch_size  # Número de pasos para validación
 clases = 19  # Número de clases (una para cada clase de animal)
 lr = 0.0001  # Tasa de aprendizaje
 lr_scheduler = ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3, verbose=1)
